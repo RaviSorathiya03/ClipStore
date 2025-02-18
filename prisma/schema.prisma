@@ -42,18 +42,22 @@ model Video {
   muxAssetId  String?
   muxPlayBackId String?
   muxUploadId String?
-  resolution String?
-  status      String?
-  thumbnail   String?
-  duration    Int?
+  resolution  String?
+  status      VideoStatus @default(UPLOADING)
+  thumbnail   String      @default("https://yourdomain.com/default-thumbnail.jpg")
+  duration    BigInt?
   publishedAt DateTime @default(now())
+  deletedAt   DateTime?
   userId      String
   user        User     @relation(fields: [userId], references: [id])
   comments    Comment[]
   likes       Like[]
   views       VideoView[]
   viewCount   Int      @default(0)
+
+  @@index([userId])
 }
+
 
 model Comment {
   id          String   @id @default(uuid())
@@ -84,3 +88,11 @@ model Like {
   createdAt  DateTime @default(now())
   @@unique([videoId, userId])
 }
+
+enum VideoStatus {
+  UPLOADING
+  PROCESSING
+  READY
+  FAILED
+}
+
