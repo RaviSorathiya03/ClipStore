@@ -54,6 +54,7 @@ model Video {
   likes       Like[]
   views       VideoView[]
   viewCount   Int      @default(0)
+  likeCount   Int      @default(0)
 
   @@index([userId])
 }
