@@ -2,7 +2,7 @@ import { prisma } from "@/lib/prisma";
 import { NextRequest, NextResponse } from "next/server";
 import crypto from "crypto";
 
-// Verify Mux webhook signature
+// Function to verify Mux signature
 function verifyMuxSignature(body: string, signature: string | null, secret: string) {
   if (!signature) {
     console.error("🚨 Missing Mux signature");
@@ -23,12 +23,14 @@ function verifyMuxSignature(body: string, signature: string | null, secret: stri
     return false;
   }
 
+  // Ensure timestamp is recent (within 5 minutes)
   const fiveMinutesAgo = Math.floor(Date.now() / 1000) - 300;
   if (parseInt(timestamp, 10) < fiveMinutesAgo) {
     console.error("🚨 Expired webhook timestamp");
     return false;
   }
 
+  // Compute the HMAC hash
   const computedHash = crypto
     .createHmac("sha256", secret)
     .update(`${timestamp}.${body}`)
@@ -56,6 +58,8 @@ export async function POST(req: NextRequest) {
     const rawBody = await req.text();
     const signature = req.headers.get("mux-signature");
 
+    console.log("📡 Webhook received with signature:", signature);
+
     if (!verifyMuxSignature(rawBody, signature, secret)) {
       return NextResponse.json({ message: "Invalid signature" }, { status: 400 });
     }
@@ -64,7 +68,7 @@ export async function POST(req: NextRequest) {
     try {
       body = JSON.parse(rawBody);
     } catch (err) {
-      console.error("🚨 Failed to parse JSON body", err);
+      console.error("🚨 Failed to parse JSON body:", err);
       return NextResponse.json({ message: "Invalid JSON" }, { status: 400 });
     }
 
@@ -77,6 +81,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ message: "Missing event type" }, { status: 400 });
     }
 
+    // Handle Mux events
     switch (eventType) {
       case "video.asset.created": {
         const passThroughId = body?.data?.passthrough;
@@ -86,7 +91,7 @@ export async function POST(req: NextRequest) {
         }
 
         await prisma.video.update({
-          where: { id: passThroughId as string },
+          where: { id: passThroughId },
           data: { status: "PROCESSING" },
         });
 
@@ -95,23 +100,20 @@ export async function POST(req: NextRequest) {
       }
 
       case "video.asset.ready": {
-        const assetId = body?.data?.id;
-        const playbackId = body?.data?.playback_ids?.[0]?.id;
-        const duration = body?.data?.duration;
-        const resolution = body?.data?.max_stored_resolution;
-        const passThroughId = body?.data?.passthrough;
+        const { id: assetId, playback_ids, duration, max_stored_resolution, passthrough } = body?.data;
+        const playbackId = playback_ids?.[0]?.id;
 
-        if (!assetId || !playbackId) {
-          console.error("🚨 Missing asset or playback ID");
+        if (!assetId || !playbackId || !passthrough) {
+          console.error("🚨 Missing required data for video.asset.ready");
           break;
         }
 
-        const video = await prisma.video.findFirst({
-          where: { id:  passThroughId as string},
+        const video = await prisma.video.findUnique({
+          where: { id: passthrough },
         });
 
         if (!video) {
-          console.error("🚨 No video found for assetId:", assetId);
+          console.error("🚨 No video found for passthrough ID:", passthrough);
           break;
         }
 
@@ -122,7 +124,7 @@ export async function POST(req: NextRequest) {
             videoLink: `https://stream.mux.com/${playbackId}.m3u8`,
             muxPlayBackId: playbackId,
             duration,
-            resolution,
+            resolution: max_stored_resolution,
           },
         });
 
@@ -131,21 +133,19 @@ export async function POST(req: NextRequest) {
       }
 
       case "video.upload.asset_created": {
-        const assetId = body?.data?.asset_id;
-        const uploadId = body?.data?.upload_id;
-        const passThroughId = body?.data?.passthrough;
+        const { asset_id: assetId, upload_id: uploadId, passthrough } = body?.data;
 
-        if (!passThroughId || !assetId || !uploadId) {
-          console.error("🚨 Missing required data for asset_created");
+        if (!passthrough || !assetId || !uploadId) {
+          console.error("🚨 Missing required data for video.upload.asset_created");
           break;
         }
 
         await prisma.video.update({
-          where: { id: passThroughId as string },
+          where: { id: passthrough },
           data: { muxUploadId: uploadId, muxAssetId: assetId },
         });
 
-        console.log("✅ Video asset details updated for passthrough ID:", passThroughId);
+        console.log("✅ Video asset details updated for passthrough ID:", passthrough);
         break;
       }
 
