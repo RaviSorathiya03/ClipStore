@@ -5,22 +5,27 @@ import crypto from "crypto";
 // Verify Mux webhook signature
 function verifyMuxSignature(body: string, signature: string | null, secret: string) {
   if (!signature) {
-    console.error("Missing Mux signature");
+    console.error("🚨 Missing Mux signature");
     return false;
   }
 
   const [timestampPart, hashPart] = signature.split(",");
-  const timestamp = timestampPart?.replace("t=", "");
-  const hash = hashPart?.replace("v1=", "");
+  if (!timestampPart || !hashPart) {
+    console.error("🚨 Invalid signature format");
+    return false;
+  }
+
+  const timestamp = timestampPart.replace("t=", "");
+  const hash = hashPart.replace("v1=", "");
 
   if (!timestamp || !hash) {
-    console.error("Invalid signature format");
+    console.error("🚨 Missing timestamp or hash in signature");
     return false;
   }
 
   const fiveMinutesAgo = Math.floor(Date.now() / 1000) - 300;
-  if (parseInt(timestamp) < fiveMinutesAgo) {
-    console.error("Expired webhook timestamp");
+  if (parseInt(timestamp, 10) < fiveMinutesAgo) {
+    console.error("🚨 Expired webhook timestamp");
     return false;
   }
 
@@ -30,10 +35,13 @@ function verifyMuxSignature(body: string, signature: string | null, secret: stri
     .digest("hex");
 
   if (computedHash !== hash) {
-    console.error("Signature verification failed");
+    console.error("🚨 Signature verification failed");
+    console.error("🔍 Computed hash:", computedHash);
+    console.error("🔍 Provided hash:", hash);
     return false;
   }
 
+  console.log("✅ Signature verified");
   return true;
 }
 
@@ -41,7 +49,8 @@ export async function POST(req: NextRequest) {
   try {
     const secret = process.env.MUX_SIGNING_SECRET;
     if (!secret) {
-      throw new Error("Mux signing secret is not defined");
+      console.error("🚨 Mux signing secret is not defined");
+      return NextResponse.json({ message: "Server error" }, { status: 500 });
     }
 
     const rawBody = await req.text();
@@ -51,25 +60,37 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ message: "Invalid signature" }, { status: 400 });
     }
 
-    const body = JSON.parse(rawBody);
-    const eventType = body.type;
+    let body;
+    try {
+      body = JSON.parse(rawBody);
+    } catch (err) {
+      console.error("🚨 Failed to parse JSON body", err);
+      return NextResponse.json({ message: "Invalid JSON" }, { status: 400 });
+    }
+
+    const eventType = body?.type;
     console.log("🚀 Received Mux event:", eventType);
     console.log("🔍 Full Payload:", JSON.stringify(body, null, 2));
+
+    if (!eventType) {
+      console.error("🚨 Missing event type");
+      return NextResponse.json({ message: "Missing event type" }, { status: 400 });
+    }
 
     switch (eventType) {
       case "video.asset.created": {
         const passThroughId = body?.data?.passthrough;
         if (!passThroughId) {
-          console.error("Missing passthrough ID");
+          console.error("🚨 Missing passthrough ID");
           break;
         }
 
-        const result = await prisma.video.update({
+        await prisma.video.update({
           where: { id: passThroughId as string },
           data: { status: "PROCESSING" },
         });
 
-        console.log("✅ Video status updated to PROCESSING:", result);
+        console.log("✅ Video status updated to PROCESSING for ID:", passThroughId);
         break;
       }
 
@@ -80,7 +101,7 @@ export async function POST(req: NextRequest) {
         const resolution = body?.data?.max_stored_resolution;
 
         if (!assetId || !playbackId) {
-          console.error("Missing asset or playback ID");
+          console.error("🚨 Missing asset or playback ID");
           break;
         }
 
@@ -89,11 +110,11 @@ export async function POST(req: NextRequest) {
         });
 
         if (!video) {
-          console.error("No video found for assetId:", assetId);
+          console.error("🚨 No video found for assetId:", assetId);
           break;
         }
 
-        const result = await prisma.video.update({
+        await prisma.video.update({
           where: { id: video.id },
           data: {
             status: "READY",
@@ -104,7 +125,7 @@ export async function POST(req: NextRequest) {
           },
         });
 
-        console.log("✅ Video marked as READY:", result);
+        console.log("✅ Video marked as READY for asset ID:", assetId);
         break;
       }
 
@@ -114,26 +135,26 @@ export async function POST(req: NextRequest) {
         const passThroughId = body?.data?.passthrough;
 
         if (!passThroughId || !assetId || !uploadId) {
-          console.error("Missing required data for asset_created");
+          console.error("🚨 Missing required data for asset_created");
           break;
         }
 
-        const result = await prisma.video.update({
+        await prisma.video.update({
           where: { id: passThroughId as string },
           data: { muxUploadId: uploadId, muxAssetId: assetId },
         });
 
-        console.log("✅ Video asset details updated:", result);
+        console.log("✅ Video asset details updated for passthrough ID:", passThroughId);
         break;
       }
 
       default:
-        console.warn("Unhandled Mux event:", eventType);
+        console.warn("⚠️ Unhandled Mux event:", eventType);
     }
 
     return NextResponse.json({ message: "Webhook processed successfully" }, { status: 200 });
   } catch (error) {
     console.error("❌ Error handling Mux webhook:", error);
-    return NextResponse.json({ message: "Failed to process webhook", error: error }, { status: 500 });
+    return NextResponse.json({ message: "Failed to process webhook" }, { status: 500 });
   }
 }
