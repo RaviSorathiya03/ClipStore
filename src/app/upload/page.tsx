@@ -87,6 +87,8 @@ export default function VideoUpload() {
         },
       })
 
+      console.log(response)
+
 
       setUploadStatus("success")
       setCurrentStep(3)
