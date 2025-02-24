@@ -29,12 +29,12 @@ function verifyMuxSignature(body: string, signature: string | null, secret: stri
     .update(`${timestamp}.${body}`)
     .digest("hex");
 
-  const isValid = computedHash === hash;
-  if (!isValid) {
+  if (computedHash !== hash) {
     console.error("Signature verification failed");
+    return false;
   }
 
-  return isValid;
+  return true;
 }
 
 export async function POST(req: NextRequest) {
@@ -53,37 +53,43 @@ export async function POST(req: NextRequest) {
 
     const body = JSON.parse(rawBody);
     const eventType = body.type;
-    console.log("Received Mux event:", eventType);
-    console.log("Payload:", body);
+    console.log("🚀 Received Mux event:", eventType);
+    console.log("🔍 Full Payload:", JSON.stringify(body, null, 2));
 
     switch (eventType) {
       case "video.asset.created": {
-        const passThroughId = body.data.passthrough;
-        console.log("Processing asset creation for video ID:", passThroughId);
+        const passThroughId = body?.data?.passthrough;
+        if (!passThroughId) {
+          console.error("Missing passthrough ID");
+          break;
+        }
 
         const result = await prisma.video.update({
           where: { id: passThroughId as string },
           data: { status: "PROCESSING" },
         });
 
-        console.log("Database update result:", result);
+        console.log("✅ Video status updated to PROCESSING:", result);
         break;
       }
 
       case "video.asset.ready": {
-        const assetId = body.data.id;
-        const playbackId = body.data.playback_ids?.[0]?.id;
-        const duration = body.data.duration;
-        const resolution = body.data.max_stored_resolution;
+        const assetId = body?.data?.id;
+        const playbackId = body?.data?.playback_ids?.[0]?.id;
+        const duration = body?.data?.duration;
+        const resolution = body?.data?.max_stored_resolution;
 
-        console.log("Processing asset ready for asset ID:", assetId);
+        if (!assetId || !playbackId) {
+          console.error("Missing asset or playback ID");
+          break;
+        }
 
         const video = await prisma.video.findFirst({
           where: { muxAssetId: assetId as string },
         });
 
         if (!video) {
-          console.error("No video found with muxAssetId:", assetId);
+          console.error("No video found for assetId:", assetId);
           break;
         }
 
@@ -98,33 +104,36 @@ export async function POST(req: NextRequest) {
           },
         });
 
-        console.log("Video marked as READY:", result);
+        console.log("✅ Video marked as READY:", result);
         break;
       }
 
       case "video.upload.asset_created": {
-        const assetId = body.data.asset_id;
-        const uploadId = body.data.upload_id;
-        const passThroughId = body.data.passthrough;
+        const assetId = body?.data?.asset_id;
+        const uploadId = body?.data?.upload_id;
+        const passThroughId = body?.data?.passthrough;
 
-        console.log("Processing asset created with passthrough ID:", passThroughId);
+        if (!passThroughId || !assetId || !uploadId) {
+          console.error("Missing required data for asset_created");
+          break;
+        }
 
         const result = await prisma.video.update({
           where: { id: passThroughId as string },
           data: { muxUploadId: uploadId, muxAssetId: assetId },
         });
 
-        console.log("Database update result:", result);
+        console.log("✅ Video asset details updated:", result);
         break;
       }
 
       default:
-        console.log("Unhandled Mux event:", eventType);
+        console.warn("Unhandled Mux event:", eventType);
     }
 
-    return NextResponse.json({ message: "Webhook received" }, { status: 200 });
+    return NextResponse.json({ message: "Webhook processed successfully" }, { status: 200 });
   } catch (error) {
-    console.error("Error handling Mux webhook:", error);
-    return NextResponse.json({ message: "Failed to handle webhook" }, { status: 500 });
+    console.error("❌ Error handling Mux webhook:", error);
+    return NextResponse.json({ message: "Failed to process webhook", error: error }, { status: 500 });
   }
 }
