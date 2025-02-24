@@ -75,7 +75,7 @@ export default function VideoUpload() {
 
       const { data } = await axios.post("/api/video", { title })
       const uploadUrl = data.url
-      console.log(data.id)
+      console.log(data)
 
       const response = await axios.put(uploadUrl, file, {
         headers: {
@@ -87,7 +87,6 @@ export default function VideoUpload() {
         },
       })
 
-      console.log(response);
 
       setUploadStatus("success")
       setCurrentStep(3)

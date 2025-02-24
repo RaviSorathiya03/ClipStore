@@ -99,6 +99,7 @@ export async function POST(req: NextRequest) {
         const playbackId = body?.data?.playback_ids?.[0]?.id;
         const duration = body?.data?.duration;
         const resolution = body?.data?.max_stored_resolution;
+        const passThroughId = body?.data?.passthrough;
 
         if (!assetId || !playbackId) {
           console.error("🚨 Missing asset or playback ID");
@@ -106,7 +107,7 @@ export async function POST(req: NextRequest) {
         }
 
         const video = await prisma.video.findFirst({
-          where: { muxAssetId: assetId as string },
+          where: { id:  passThroughId as string},
         });
 
         if (!video) {
