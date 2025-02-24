@@ -77,7 +77,7 @@ export default function VideoUpload() {
       const uploadUrl = data.url
       console.log(data.id)
 
-      await axios.put(uploadUrl, file, {
+      const response = await axios.put(uploadUrl, file, {
         headers: {
           "Content-Type": file.type,
         },
@@ -86,6 +86,8 @@ export default function VideoUpload() {
           setProgress(percentCompleted)
         },
       })
+
+      console.log(response);
 
       setUploadStatus("success")
       setCurrentStep(3)
