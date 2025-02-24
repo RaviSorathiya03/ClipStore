@@ -20,8 +20,8 @@ export async function POST(req: NextRequest) {
     // Step 2: Create a video record in the database
     const dbVideo = await prisma.video.create({
       data: {
-        title: body.title as string,
-        userId: user.id,
+        title: body.title as string || "",
+        userId: user.id as string,
         status: "UPLOADING",
       },
     });

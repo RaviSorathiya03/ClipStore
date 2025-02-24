@@ -14,7 +14,7 @@ export async function POST(req: NextRequest){
         }
         const videoId = req.nextUrl.searchParams.get("videoId");
         const like = await prisma.$transaction(async (tx)=>{
-            const like = await tx.like.create({
+            const like1 = await tx.like.create({
                 data:{
                     videoId: videoId as string,
                     userId: user.id as string
@@ -28,6 +28,11 @@ export async function POST(req: NextRequest){
                     likeCount: {increment: 1}
                 }
             })
+
+            return {
+                like1, 
+                likeCount
+            }
         })
 
         NextResponse.json({
@@ -59,18 +64,19 @@ export async function DELETE(req: NextRequest){
         }
         const videoId = req.nextUrl.searchParams.get("videoId");
         const disLike = await prisma.$transaction(async (tx)=>{
-            const like = await prisma.like.findFirst({
+            const like = await tx.like.findFirst({
                 where:{
                     userId: user.id as string,
                     videoId: videoId as string
                 }
             })
 
-            const disLike = await prisma.like.delete({
+            const disLike = await tx.like.delete({
                 where:{
                     id: like?.id as string
                 }
             })
+            return disLike
         })
 
         NextResponse.json({

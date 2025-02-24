@@ -18,7 +18,8 @@ export async function POST(req: NextRequest){
             }
         })
         NextResponse.json({
-            message: "Views created successfully"
+            message: "Views created successfully", 
+            data: view
         })
     } catch (error) {
         console.log(error);

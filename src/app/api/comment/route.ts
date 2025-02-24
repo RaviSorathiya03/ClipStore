@@ -2,7 +2,7 @@ import { prisma } from "@/lib/prisma";
 import { currentUser } from "@clerk/nextjs/server";
 import { NextRequest, NextResponse } from "next/server";
 
-export default async function POST(req:NextRequest){
+export async function POST(req:NextRequest){
     try {
         const user = await currentUser();
         const videoId = req.nextUrl.searchParams.get("videoId");
@@ -31,7 +31,8 @@ export default async function POST(req:NextRequest){
         })
 
         NextResponse.json({
-            message: "You have successfully commented in the post"
+            message: "You have successfully commented in the post",
+            data: comment
         }, {
             status: 200
         })
@@ -77,7 +78,8 @@ export async function PUT(req: NextRequest){
         })
 
         NextResponse.json({
-            message: "You have successfully commented in the post"
+            message: "You have successfully commented in the post",
+            data: comment
         }, {
             status: 200
         })
@@ -111,7 +113,8 @@ export async function DELETE(req: NextRequest){
             }
         })
         NextResponse.json({
-            message: "Comment Successfully Deleted"
+            message: "Comment Successfully Deleted", 
+            data: deleteComment
         }, {
             status: 200
         })
